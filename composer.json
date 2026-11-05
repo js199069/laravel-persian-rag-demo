@@ -6,11 +6,11 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "repositories": [
-    {
-        "type": "path",
-        "url": "packages/laravel-persian-rag",
-        "options": { "symlink": true }
-    }
+        {
+            "type": "path",
+            "url": "../laravel-persian-rag",
+            "options": { "symlink": true }
+        }
     ],
     "require": {
         "php": "^8.3",
