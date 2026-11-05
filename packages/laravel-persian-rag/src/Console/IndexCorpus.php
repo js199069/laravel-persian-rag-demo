@@ -4,6 +4,7 @@ namespace Js199069\PersianRag\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Js199069\PersianRag\Indexing\ChunkContext;
 use Js199069\PersianRag\Indexing\Chunker;
 use Js199069\PersianRag\Models\RagChunk;
 use Js199069\PersianRag\Models\RagDocument;
@@ -78,7 +79,7 @@ class IndexCorpus extends Command
             $chunks = $chunker->chunk($data['pages']);
 
             // زمینه‌ی هر تکه: عنوان سند و مخاطب آن
-            $context = "عنوان سند: {$title}\nمخاطب: " . ($labels[$audience] ?? $audience);
+            $context = ChunkContext::text($title, $audience, $labels);
 
             $vectors = [];
             foreach (array_chunk($chunks, $batch) as $group) {

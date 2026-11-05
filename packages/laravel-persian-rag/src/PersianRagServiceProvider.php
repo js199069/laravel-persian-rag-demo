@@ -59,6 +59,7 @@ class PersianRagServiceProvider extends ServiceProvider
                 Console\AskCorpus::class,
                 Console\EvaluateAnswers::class,
                 Console\HealthCheck::class,
+                Console\ReindexText::class,
             ]);
 
             $this->publishes([

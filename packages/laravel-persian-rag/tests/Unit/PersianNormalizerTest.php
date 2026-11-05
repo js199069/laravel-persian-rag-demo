@@ -68,11 +68,19 @@ final class PersianNormalizerTest extends TestCase
     }
 
     /**
-     * باگ شناخته‌شده: OCR رقم و کلمه را می‌چسباند و جست‌وجوی متنی «جلسه» را در «16جلسه» پیدا نمی‌کند.
-     * وقتی اصلاح شد، این تست باید به '16 جلسه' تغییر کند.
+     * تصمیم آگاهانه (هفته‌ی ۵): جدا کردن رقم از کلمه («16جلسه» ← «16 جلسه») امتحان و سنجیده شد.
+     * کلمه‌های تازه‌آزادشده (مثل «پایه» در «1پایه») سندهای هم‌موضوع ولی نادرست را در جست‌وجوی متنی بالا آوردند:
+     * رتبه‌ی ۱ از ۹۵٪ به ۹۰٪ و MRR از ۰٫۹۸ به ۰٫۹۴. برگردانده شد.
+     * اگر رتبه‌بندی متنی بهتر شد (مثلاً وزن IDF یا reranker)، دوباره بسنج.
      */
-    public function test_known_issue_digits_stay_attached_to_words(): void
+    public function test_search_form_keeps_digits_attached_by_decision(): void
     {
-        $this->assertSame('16جلسه', N::searchForm('16جلسه'));
+        $this->assertSame('یک واحد طی 16جلسه', N::searchForm('یک واحد طی 16جلسه'));
+    }
+
+    /** embedding از canonical ساخته می‌شود؛ جدا کردن رقم فقط برای جست‌وجوی متنی است تا ایندکس برداری عوض نشود */
+    public function test_canonical_keeps_digits_attached(): void
+    {
+        $this->assertSame('16جلسه', N::canonical('16جلسه'));
     }
 }
