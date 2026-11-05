@@ -3,6 +3,9 @@
 namespace Js199069\PersianRag\Answering;
 
 use Js199069\PersianRag\Search\HybridSearch;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\ProviderConnectionException;
+use Throwable;
 
 final class AnswerGenerator
 {
@@ -13,6 +16,7 @@ final class AnswerGenerator
         private float $minSimilarity = 0.55,
         private int $timeout = 300,
         private string $refusal = 'پاسخ این سؤال در اسناد موجود نیامده است.',
+        private int $retries = 2,
     ) {}
 
     /**
@@ -96,11 +100,18 @@ final class AnswerGenerator
         }
 
         $llmStart = microtime(true);
-        $text = trim((string) (new RagAnswerAgent($p['instructions']))->prompt(
-            $p['prompt'],
-            provider: $this->llmProvider,
-            timeout: $this->timeout,
-        ));
+                        // خطای موقت سرویس (شلوغی ۵۰۲/۵۰۳ یا قطع اتصال): دوباره تلاش، با فاصله‌ی ۳ و ۶ ثانیه
+                $text = trim((string) retry(
+                    $this->retries + 1,
+                    fn () => (new RagAnswerAgent($p['instructions']))->prompt(
+                        $p['prompt'],
+                        provider: $this->llmProvider,
+                        timeout: $this->timeout,
+                    ),
+                    fn (int $attempt) => $attempt * 3000,
+                    fn (Throwable $e) => $e instanceof ProviderOverloadedException
+                    || $e instanceof ProviderConnectionException,
+                ));
         $result['llm_ms'] = (int) ((microtime(true) - $llmStart) * 1000);
 
         $parsed = AnswerParser::parse($text, $p['refusal'], array_keys($p['sources']));

@@ -33,6 +33,7 @@ class PersianRagServiceProvider extends ServiceProvider
             minSimilarity: (float) config('persian-rag.min_similarity'),
             timeout: (int) config('persian-rag.answer.timeout'),
             refusal: config('persian-rag.answer.refusal'),
+            retries: (int) config('persian-rag.answer.retries', 2),
         ));
 
         $this->app->bind(Rag::class, fn ($app) => new Rag(

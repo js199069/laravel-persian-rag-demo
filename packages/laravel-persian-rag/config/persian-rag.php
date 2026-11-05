@@ -45,6 +45,7 @@ return [
         'provider' => env('RAG_LLM_PROVIDER', 'ollama_local'),
         'k' => 3,
         'timeout' => 300,
+        'retries' => 2,              // تلاش دوباره وقتی سرویس پاسخ شلوغ است (۵۰۲/۵۰۳)
         'refusal' => 'پاسخ این سؤال در اسناد موجود نیامده است.',
     ],
 
