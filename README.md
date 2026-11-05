@@ -92,4 +92,5 @@ Open http://127.0.0.1:8000.
 
 MIT.
 
-![Demo: answer with highlighted citation](docs/sshot-1399.png)
+![Demo: answer with highlighted citation](docs/sshot_1399.png)
+![Demo: answer with highlighted citation](docs/sshot-1400.png)
