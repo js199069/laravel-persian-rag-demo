@@ -2,20 +2,22 @@
 
 namespace Js199069\PersianRag\Console;
 
-use Js199069\PersianRag\Answering\AnswerGenerator;
-use Js199069\PersianRag\Search\HybridSearch;
-use Js199069\PersianRag\Support\PersianNormalizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
+use Js199069\PersianRag\Answering\AnswerGenerator;
+use Js199069\PersianRag\Search\HybridSearch;
+use Js199069\PersianRag\Support\Manifest;
+use Js199069\PersianRag\Support\PersianNormalizer;
+use Throwable;
 
 class EvaluateAnswers extends Command
 {
     protected $signature = 'rag:eval-answers
         {--file=storage/app/eval.csv : فایل سؤال‌های ارزیابی}
         {--ids= : فقط این شناسه‌ها، مثلاً 1,2,16}
-        {--k=3 : تعداد تکه‌ی منبع}
-        {--provider=ollama_local}
-        {--llm= : provider مدل پاسخ‌گو (مثلاً iran_api)؛ پیش‌فرض همان provider}';
+        {--k= : تعداد تکه‌ی منبع (پیش‌فرض از config)}
+        {--provider= : provider برای embedding (پیش‌فرض از config)}
+        {--llm= : provider مدل پاسخ‌گو (پیش‌فرض از config)}';
 
     protected $description = 'ارزیابی در سطح پاسخ: درستی، امتناع در سؤال بی‌جواب، و اعتبار ارجاع‌ها';
 
@@ -30,20 +32,34 @@ class EvaluateAnswers extends Command
         }
 
         $ids = $this->option('ids') ? array_map('trim', explode(',', $this->option('ids'))) : null;
-        $provider = $this->option('provider');
-        $llm = $this->option('llm') ?: config('persian-rag.answer.provider', $provider);
+        $provider = $this->option('provider') ?: config('persian-rag.embedding.provider');
+        $llm = $this->option('llm') ?: config('persian-rag.answer.provider');
 
         $generator = new AnswerGenerator(
-            new HybridSearch($provider),
-            $llm,
-            (int) $this->option('k'),
-            (float) config('persian-rag.min_similarity', 0.55),
+            search: new HybridSearch(
+                provider: $provider,
+                candidates: (int) config('persian-rag.search.candidates'),
+                maxPerDocument: (int) config('persian-rag.search.max_per_document'),
+                maxTermShare: (float) config('persian-rag.search.max_term_share'),
+                rrfK: (int) config('persian-rag.search.rrf_k'),
+                questionWords: config('persian-rag.search.question_words'),
+            ),
+            llmProvider: $llm,
+            k: (int) ($this->option('k') ?: config('persian-rag.answer.k')),
+            minSimilarity: (float) config('persian-rag.min_similarity'),
+            timeout: (int) config('persian-rag.answer.timeout'),
+            refusal: config('persian-rag.answer.refusal'),
+            retries: (int) config('persian-rag.answer.retries', 2),
         );
 
         $this->info("مدل پاسخ‌گو: {$llm}");
 
+        // نتیجه بعد از هر سؤال ذخیره می‌شود؛ قطع شدن وسط کار، کار انجام‌شده را از بین نمی‌برد
+        $out = 'eval-answers/' . now()->format('Ymd-His') . '-' . $llm . '.json';
+
         $table = [];
         $details = [];
+        $errors = [];
         $stats = [
             'answerable' => 0, 'false_refusals' => 0, 'mixed_answers' => 0,
             'keyword_total' => 0, 'keyword_correct' => 0,
@@ -53,7 +69,7 @@ class EvaluateAnswers extends Command
             'llm_ms' => [],
         ];
 
-        foreach ($this->readCsv($path) as $row) {
+        foreach (Manifest::read($path) as $row) {
             if ($ids !== null && ! in_array($row['id'], $ids, true)) {
                 continue;
             }
@@ -63,9 +79,21 @@ class EvaluateAnswers extends Command
             $expectedDocs = array_values(array_filter(array_map('trim', explode('|', $row['expected_doc'] ?? ''))));
             $keywords = array_values(array_filter(array_map('trim', explode('|', $row['expected_answer'] ?? ''))));
             $mustNotDoc = trim($row['must_not_doc'] ?? '');
+            $type = $mustNotDoc !== '' ? 'access' : ($expectedDocs === [] ? 'negative' : 'answer');
 
             $this->line("سؤال {$row['id']} ...");
-            $r = $generator->answer($row['question'], $audiences);
+
+            try {
+                $r = $generator->answer($row['question'], $audiences);
+            } catch (Throwable $e) {
+                // خطای یک سؤال (مثلاً قطع سرویس بعد از همه‌ی تلاش‌ها) ثبت می‌شود و ارزیابی ادامه پیدا می‌کند
+                $errors[] = $row['id'];
+                $table[] = [$row['id'], $type, '⚠️ خطا', '-', '-', mb_substr($e->getMessage(), 0, 70)];
+                $details[] = ['id' => $row['id'], 'question' => $row['question'], 'role' => $role, 'error' => $e->getMessage()];
+                Storage::put($out, json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+                continue;
+            }
 
             if ($r['llm_ms'] > 0) {
                 $stats['llm_ms'][] = $r['llm_ms'];
@@ -75,13 +103,12 @@ class EvaluateAnswers extends Command
             $excerpt = mb_substr(preg_replace('/\s+/u', ' ', $r['answer']), 0, 70);
             $refusedLabel = $r['refused'] ? ($r['refused_by'] === 'retrieval' ? 'جست‌وجو' : 'مدل') : '-';
 
-            if ($mustNotDoc !== '') {
-                // تست دسترسی
+            if ($type === 'access') {
                 $stats['access']++;
                 $leak = in_array($mustNotDoc, $sourceDocs, true);
                 $stats['leaks'] += $leak ? 1 : 0;
                 $table[] = [$row['id'], 'access', $refusedLabel, '-', $leak ? '❌ نشت' : '✅', $excerpt];
-            } elseif ($expectedDocs === []) {
+            } elseif ($type === 'negative') {
                 // سؤال بی‌جواب: فقط امتناع خالص درست است
                 $stats['negative']++;
                 if ($r['refused']) {
@@ -92,7 +119,6 @@ class EvaluateAnswers extends Command
                 $label = $r['refused'] ? "✅ {$refusedLabel}" : ($r['mixed'] ? '❌ مختلط' : '❌ جواب داد');
                 $table[] = [$row['id'], 'negative', $label, '-', '-', $excerpt];
             } else {
-                // سؤال جواب‌دار
                 $stats['answerable']++;
                 $stats['false_refusals'] += $r['refused'] ? 1 : 0;
                 $stats['mixed_answers'] += $r['mixed'] ? 1 : 0;
@@ -122,6 +148,7 @@ class EvaluateAnswers extends Command
             }
 
             $details[] = ['id' => $row['id'], 'question' => $row['question'], 'role' => $role] + $r;
+            Storage::put($out, json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         }
 
         $this->table(['id', 'type', 'answered/refused', 'keyword', 'citation', 'answer'], $table);
@@ -148,29 +175,17 @@ class EvaluateAnswers extends Command
         if ($stats['llm_ms'] !== []) {
             $this->info(sprintf('میانگین زمان مدل: %.1f ثانیه', array_sum($stats['llm_ms']) / count($stats['llm_ms']) / 1000));
         }
-
-        $out = 'eval-answers/' . now()->format('Ymd-His') . '-' . $llm . '.json';
-        Storage::put($out, json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         $this->info("پاسخ‌های کامل ذخیره شد: storage/app/{$out}");
 
-        return self::SUCCESS;
-    }
+        if ($errors !== []) {
+            $this->warn(sprintf(
+                'خطا در %d سؤال (در عددهای بالا حساب نشده‌اند): %s — دوباره: --ids=%s',
+                count($errors), implode('، ', $errors), implode(',', $errors),
+            ));
 
-    private function readCsv(string $path): array
-    {
-        $content = preg_replace('/^\xEF\xBB\xBF/', '', file_get_contents($path));
-        $lines = preg_split('/\r\n|\n|\r/', trim($content));
-        $header = array_map('trim', str_getcsv(array_shift($lines), ',', '"', ''));
-
-        $rows = [];
-        foreach ($lines as $line) {
-            if (trim($line) === '') {
-                continue;
-            }
-            $values = array_slice(array_pad(str_getcsv($line, ',', '"', ''), count($header), ''), 0, count($header));
-            $rows[] = array_combine($header, $values);
+            return self::FAILURE;
         }
 
-        return $rows;
+        return self::SUCCESS;
     }
 }

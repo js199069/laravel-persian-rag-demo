@@ -48,7 +48,7 @@ final class HybridSearch
         $vectorHits = $scope(RagChunk::query())
             ->select('id')
             ->selectVectorDistance('embedding', $vector, as: 'distance')
-            ->orderByVectorDistance('embedding', $vector)
+            ->orderByVectorDistance('embedding', $vector)->orderBy('id')
             ->limit($this->candidates)
             ->get();
 
@@ -60,7 +60,7 @@ final class HybridSearch
                 ->select('id')
                 ->selectRaw("ts_rank_cd(tsv, to_tsquery('simple', ?)) AS rank", [$tsquery])
                 ->whereRaw("tsv @@ to_tsquery('simple', ?)", [$tsquery])
-                ->orderByDesc('rank')
+                ->orderByDesc('rank')->orderBy('id')
                 ->limit($this->candidates)
                 ->get();
         }

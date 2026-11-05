@@ -73,6 +73,17 @@ class ExtractCorpus extends Command
             $report[] = $this->processDocument($doc, $dir, $outDir);
         }
 
+        $missing = array_values(array_filter($report, fn ($r) => $r['status'] === 'MISSING'));
+        $report = array_values(array_filter($report, fn ($r) => $r['status'] !== 'MISSING'));
+        if ($missing !== []) {
+            $missingIds = array_column($missing, 'id');
+            $this->warn(sprintf(
+                '%d سند در manifest هست ولی فایلش در پوشه نیست (رد شد): %s',
+                count($missingIds),
+                implode('، ', array_slice($missingIds, 0, 10)) . (count($missingIds) > 10 ? '، ...' : ''),
+            ));
+        }
+
         if ($report === []) {
             $this->warn('هیچ سندی پردازش نشد.');
 
@@ -132,7 +143,11 @@ class ExtractCorpus extends Command
 
         try {
             if (! is_file($path)) {
-                throw new RuntimeException("فایل پیدا نشد: {$doc['file']}");
+                // فایل نیست: خطای پردازش نیست، فقط سندی که هنوز اضافه نشده
+                $row['status'] = 'MISSING';
+                $row['sample'] = "فایل پیدا نشد: {$doc['file']}";
+
+                return $row;
             }
 
             if ($type === 'docx') {

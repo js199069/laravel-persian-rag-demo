@@ -2,12 +2,12 @@
 
 namespace Js199069\PersianRag\Console;
 
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
 use Js199069\PersianRag\Extraction\OcrPdfExtractor;
 use Js199069\PersianRag\Extraction\PdfTextExtractor;
 use Js199069\PersianRag\Support\PersianNormalizer;
 use Js199069\PersianRag\Support\TextQuality;
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\File;
 use Throwable;
 
 class RefineCorpus extends Command
@@ -16,13 +16,14 @@ class RefineCorpus extends Command
         {--only= : فقط یک سند، مثلاً doc-08}
         {--tie=3 : اگر OCR کمتر از این مقدار بهتر بود، متن اصلی انتخاب می‌شود (عددهایش دقیق‌ترند)}
         {--no-clean : بدون حذف خط‌های نویز}
+        {--min-lexicon=400 : کمتر از این تعداد کلمه در واژه‌نامه، حذف نویز انجام نمی‌شود (از دو نمونه: ۱۰۶ کلمه با ۳ سند، ۸۹۲ با ۳۱ سند)}
         {--fresh-ocr : نادیده گرفتن کش و انجام دوباره‌ی OCR}';
 
     protected $description = 'انتخاب بهترین روش (متن یا OCR) برای هر صفحه‌ی PDF و حذف محافظه‌کارانه‌ی نویز OCR';
 
     public function handle(): int
     {
-        $corpus = storage_path('app/corpus');
+        $corpus = rtrim(config('persian-rag.corpus_path'), '/\\');
         $lexiconPath = $corpus . '/lexicon.json';
 
         if (! is_file($lexiconPath)) {
@@ -31,18 +32,34 @@ class RefineCorpus extends Command
             return self::FAILURE;
         }
 
-        $quality = new TextQuality(json_decode(file_get_contents($lexiconPath), true));
-        $pdf = new PdfTextExtractor();
+        $lexicon = json_decode(file_get_contents($lexiconPath), true) ?: [];
+        $lexiconSize = isset($lexicon['words']) && is_array($lexicon['words']) ? count($lexicon['words']) : count($lexicon);
+        $quality = new TextQuality($lexicon);
+
+        $clean = ! $this->option('no-clean');
+        $minLexicon = (int) $this->option('min-lexicon');
+        $this->line("واژه‌نامه: {$lexiconSize} کلمه");
+
+        // واژه‌نامه‌ی کوچک (مجموعه‌ی کم‌سند، بدون DOCX) کلمه‌های واقعی را «ناشناخته» می‌بیند،
+        // و حذف نویز متن واقعی را هم حذف می‌کند. حذف اشتباه بدتر از نگه‌داشتن نویز است.
+        if ($clean && $lexiconSize < $minLexicon) {
+            $this->warn("واژه‌نامه کوچک‌تر از {$minLexicon} کلمه است؛ حذف نویز انجام نمی‌شود، چون متن واقعی هم حذف می‌شد. (برای اجبار: --min-lexicon=0)");
+            $clean = false;
+        }
+
+        $pdf = new PdfTextExtractor(binary: config('persian-rag.extraction.pdftotext'));
         $ocr = new OcrPdfExtractor(
-            tesseract: env('TESSERACT_BIN', 'tesseract'),
-            pdftoppm: env('PDFTOPPM_BIN', 'pdftoppm'),
+            dpi: (int) config('persian-rag.extraction.ocr_dpi'),
+            lang: config('persian-rag.extraction.ocr_language'),
+            tesseract: config('persian-rag.extraction.tesseract'),
+            pdftoppm: config('persian-rag.extraction.pdftoppm'),
+            tmpPath: config('persian-rag.extraction.ocr_tmp_path'),
         );
 
         $cacheDir = $corpus . '/ocr-cache';
         File::ensureDirectoryExists($cacheDir);
 
         $tie = (int) $this->option('tie');
-        $clean = ! $this->option('no-clean');
         $rows = [];
 
         foreach (glob($corpus . '/text/*.json') ?: [] as $jsonPath) {
@@ -137,7 +154,8 @@ class RefineCorpus extends Command
         }
 
         $this->table(['id', 'pages', 'text', 'ocr', 'dropped', 'before', 'after', 'time', 'name'], $rows);
-        $this->info('بعد از این، php artisan rag:quality را دوباره اجرا کن تا امتیازهای جدید با واژه‌نامه‌ی به‌روز دیده شوند.');
+        $this->info('بعد از این، php artisan rag:quality را دوباره اجرا کن تا امتیازهای جدید دیده شوند.');
+        $this->line('<comment>توجه: rag:quality واژه‌نامه را از نو می‌سازد؛ در مجموعه‌ای بدون DOCX، بعد از refine ممکن است خیلی کوچک شود.</comment>');
 
         return self::SUCCESS;
     }
