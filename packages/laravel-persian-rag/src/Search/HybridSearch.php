@@ -90,6 +90,20 @@ final class HybridSearch
             }
         }
 
+        // ۵. بهترین تکه‌ی برداری همیشه در نتایج: لایه‌ی ۱ «جواب نده» بر اساس شباهت همین تکه تصمیم می‌گیرد،
+        //    پس مدل هم باید همین تکه را ببیند. جای ضعیف‌ترین تکه‌ی همان سند را می‌گیرد تا سقف سند حفظ شود.
+        $best = $vectorHits->first()?->id;
+        if ($best !== null && ! in_array($best, $ids, true)) {
+            if (count($ids) < $k) {
+                $ids[] = $best;
+            } elseif ($ids !== []) {
+                $bestDocument = $documentOf[$best];
+                $sameDocument = array_values(array_filter($ids, fn ($id) => $documentOf[$id] === $bestDocument));
+                $replace = $sameDocument !== [] ? end($sameDocument) : end($ids);
+                $ids[array_search($replace, $ids, true)] = $best;
+            }
+        }
+
         $chunks = RagChunk::with('document')->findMany($ids)->keyBy('id');
         $similarity = $vectorHits->mapWithKeys(fn ($hit) => [$hit->id => 1 - (float) $hit->distance]);
         $textIds = $textHits->pluck('id')->flip();

@@ -2,66 +2,20 @@
 
 namespace Js199069\PersianRag\Tests\Feature;
 
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use Js199069\PersianRag\Contracts\Embedder;
-use Js199069\PersianRag\Models\RagChunk;
-use Js199069\PersianRag\Models\RagDocument;
 use Js199069\PersianRag\Rag;
-use Js199069\PersianRag\Support\PersianNormalizer;
-use Js199069\PersianRag\Tests\Support\FakeEmbedder;
-use Js199069\PersianRag\Tests\TestCase;
-use Throwable;
+use Js199069\PersianRag\Tests\DatabaseTestCase;
 
 /**
  * کنترل دسترسی روی PostgreSQL واقعی با pgvector.
  * فیلتر داخل خود کوئری است، پس باید با دیتابیس واقعی تست شود، نه با mock.
  */
-final class AccessControlTest extends TestCase
+final class AccessControlTest extends DatabaseTestCase
 {
-    private static bool $migrated = false;
-
-    private FakeEmbedder $embedder;
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $database = (string) config('database.connections.pgsql.database');
-        if (! str_ends_with($database, '_test')) {
-            $this->markTestSkipped("نام دیتابیس تست باید به _test ختم شود (فعلی: {$database})؛ این تست جدول‌ها را پاک می‌کند.");
-        }
-
-        try {
-            DB::connection()->getPdo();
-        } catch (Throwable $e) {
-            $this->markTestSkipped('PostgreSQL تست در دسترس نیست: ' . $e->getMessage());
-        }
-
-        if (! self::$migrated) {
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            self::$migrated = true;
-        }
-
-        $this->embedder = new FakeEmbedder();
-        $this->app->instance(Embedder::class, $this->embedder);
-
-        DB::beginTransaction();
-        $this->seedDocuments();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->app && DB::transactionLevel() > 0) {
-            DB::rollBack();
-        }
-
-        parent::tearDown();
-    }
-
-    private function seedDocuments(): void
-    {
         $this->document('doc-faculty', 'faculty', 'آیین‌نامه تخلفات اعضای هیئت علمی', [
             'تهیه یا مصرف مواد مخدر توسط عضو هیئت علمی از تخلفات انتظامی است.',
         ]);
@@ -81,31 +35,6 @@ final class AccessControlTest extends TestCase
             'انتخاب واحد خارج از تقویم آموزشی فقط با مجوز شورای آموزشی ممکن است.',
             'حذف و اضافه‌ی واحد طبق تقویم آموزشی در هفته‌ی دوم نیمسال انجام می‌شود.',
         ]);
-    }
-
-    private function document(string $key, string $audience, string $title, array $contents): void
-    {
-        $document = RagDocument::create([
-            'doc_key' => $key,
-            'title' => $title,
-            'audience' => $audience,
-            'file' => "{$key}.pdf",
-            'pages' => count($contents),
-        ]);
-
-        foreach ($contents as $i => $content) {
-            RagChunk::create([
-                'rag_document_id' => $document->id,
-                'chunk_index' => $i,
-                'page_from' => $i + 1,
-                'page_to' => $i + 1,
-                'content' => $content,
-                'search_text' => PersianNormalizer::searchForm("{$title}\n{$content}"),
-                'embedding_model' => 'fake',
-                'embedding_dims' => 1024,
-                'embedding' => $this->embedder->vector("{$title}\n{$content}"),
-            ]);
-        }
     }
 
     /** @return string[] */
