@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <!-- برای اجرای محلی، این فایل را به phpunit.xml کپی کن و رمز را بگذار (phpunit.xml در گیت نیست) -->
+        <env name="RAG_TEST_DB_HOST" value="127.0.0.1"/>
+        <env name="RAG_TEST_DB_PORT" value="5432"/>
+        <env name="RAG_TEST_DB_DATABASE" value="persian_rag_test"/>
+        <env name="RAG_TEST_DB_USERNAME" value="rag"/>
+        <env name="RAG_TEST_DB_PASSWORD" value=""/>
+    </php>
+</phpunit>

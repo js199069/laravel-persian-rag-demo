@@ -1,0 +1,53 @@
+{
+    "name": "js199069/laravel-persian-rag",
+    "description": "Persian RAG for Laravel: OCR-aware extraction, hybrid pgvector search, role-based access, and cited answers.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "rag",
+        "persian",
+        "farsi",
+        "pgvector",
+        "ocr",
+        "llm"
+    ],
+    "require": {
+        "php": "^8.3",
+        "ext-intl": "*",
+        "ext-mbstring": "*",
+        "ext-zip": "*",
+        "illuminate/console": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/process": "^13.0",
+        "illuminate/support": "^13.0",
+        "laravel/ai": "^1.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Js199069\\PersianRag\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Js199069\\PersianRag\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Js199069\\PersianRag\\PersianRagServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require-dev": {
+        "orchestra/testbench": "^11.0",
+        "phpunit/phpunit": "^11.5|^12.0"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite Unit"
+    }
+}

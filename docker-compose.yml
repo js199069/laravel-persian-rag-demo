@@ -1,0 +1,46 @@
+x-logging: &logging
+  logging:
+    options:
+      max-size: "10m"
+      max-file: "2"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      OLLAMA_URL: http://ollama:11434/v1
+      DB_HOST: postgres
+    depends_on:
+      - postgres
+      - ollama
+    <<: *logging
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    pull_policy: missing
+    command: postgres -c shared_buffers=128MB
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    <<: *logging
+
+  ollama:
+    image: ollama/ollama
+    pull_policy: missing
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    <<: *logging
+
+volumes:
+  pgdata:
+  ollama:

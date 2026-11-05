@@ -1,0 +1,83 @@
+# ============================================================
+# Persian RAG — .gitignore ریشه‌ی پروژه
+# ============================================================
+
+# ---------- رمزها و کلیدها (هرگز commit نشوند) ----------
+.env
+.env.*
+!.env.example
+auth.json
+/storage/*.key
+*.pem
+!/packages/**/tests/**/*.pem
+
+# ---------- وابستگی‌ها ----------
+/vendor/
+/node_modules/
+
+# ---------- پکیج: فایل‌های محلی که نباید منتشر شوند ----------
+# (پکیج .gitignore خودش را هم دارد؛ این‌ها برای اطمینان دوباره‌اند)
+/packages/*/vendor/
+/packages/*/composer.lock
+/packages/*/phpunit.xml
+/packages/*/.phpunit.cache/
+/packages/*/.phpunit.result.cache
+
+# ---------- اسناد واقعی و خروجی‌های پردازش ----------
+# اسناد دانشگاه منتشر نمی‌شوند؛ برای مخزن عمومی، اسناد نمونه‌ی ساختگی جدا ساخته می‌شود
+/storage/app/corpus/
+/storage/app/ocr-tmp/
+
+# ---------- داده‌ها و خروجی‌های ارزیابی ----------
+# به اسناد واقعی ارجاع می‌دهند؛ نسخه‌ی نمونه‌ی عمومی جدا ساخته می‌شود
+/storage/app/eval.csv
+/storage/app/eval-answers/
+/storage/app/questions.txt
+/storage/app/q-*.txt
+/storage/app/baseline-*.txt
+
+# ---------- مدل‌ها و فایل‌های حجیم ----------
+*.gguf
+Modelfile
+*.safetensors
+*.bin
+
+# ---------- اسکریپت‌های یک‌بارمصرف بازسازی ----------
+/week*-*.php
+
+# ---------- خروجی ساخت و فایل‌های موقت لاراول ----------
+/public/build
+/public/hot
+/public/storage
+/storage/pail
+/bootstrap/cache/*.php
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ---------- تست ----------
+/.phpunit.cache
+.phpunit.result.cache
+/coverage/
+
+# ---------- ویرایشگرها و ابزارها ----------
+/.idea
+/.vscode
+/.fleet
+/.nova
+/.zed
+.phpactor.json
+*.swp
+*~
+
+# ---------- سیستم‌عامل ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# ---------- Homestead و Docker محلی ----------
+Homestead.json
+Homestead.yaml
+docker-compose.override.yml
