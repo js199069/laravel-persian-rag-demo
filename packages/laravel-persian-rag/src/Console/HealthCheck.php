@@ -125,6 +125,18 @@ class HealthCheck extends Command
         $provider = config('persian-rag.embedding.provider');
         $expected = (int) config('persian-rag.embedding.dimensions');
 
+        // اول: آیا provider اصلاً تعریف شده؟ وگرنه راهنمایی «Ollama روشن است؟» گمراه‌کننده است
+        if (! config("ai.providers.{$provider}")) {
+            $this->add('embedding', 'fail', "provider «{$provider}» در config/ai.php تعریف نشده. یک provider از نوع openai-compatible با models.embeddings.default اضافه کن، یا RAG_EMBED_PROVIDER را عوض کن.");
+
+            return;
+        }
+        if (! config("ai.providers.{$provider}.models.embeddings.default")) {
+            $this->add('embedding', 'fail', "provider «{$provider}» مدل embedding ندارد (models.embeddings.default در config/ai.php؛ مثلاً OLLAMA_EMBED_MODEL=bge-m3).");
+
+            return;
+        }
+
         try {
             $start = microtime(true);
             $vector = Embeddings::for(['آزمون سلامت'])->generate($provider)->embeddings[0];
@@ -134,6 +146,7 @@ class HealthCheck extends Command
                 ? $this->add('embedding', 'ok', "{$provider}، " . count($vector) . " بعد، {$ms}ms")
                 : $this->add('embedding', 'fail', count($vector) . " بعد، ولی config و ستون دیتابیس {$expected} بعد می‌خواهند");
         } catch (Throwable $e) {
+            // provider تعریف شده ولی جواب نمی‌دهد؛ حالا این راهنمایی درست است
             $hint = str_contains($provider, 'ollama') ? ' (Ollama روشن است؟ ollama ps)' : '';
             $this->add('embedding', 'fail', "{$provider}: " . $this->reason($e) . $hint);
 
@@ -161,7 +174,12 @@ class HealthCheck extends Command
         $provider = config('persian-rag.answer.provider');
 
         if (! config("ai.providers.{$provider}")) {
-            $this->add('مدل پاسخ', 'fail', "provider «{$provider}» در config/ai.php تعریف نشده (RAG_LLM_PROVIDER)");
+            $this->add('مدل پاسخ', 'fail', "provider «{$provider}» در config/ai.php تعریف نشده. یک provider از نوع openai-compatible با models.text.default اضافه کن، یا RAG_LLM_PROVIDER را عوض کن.");
+
+            return;
+        }
+        if (! config("ai.providers.{$provider}.models.text.default")) {
+            $this->add('مدل پاسخ', 'fail', "provider «{$provider}» مدل متنی ندارد (models.text.default در config/ai.php).");
 
             return;
         }
